@@ -1,0 +1,441 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mapa de Calor RSSI - Drone</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet.heat@0.2.0/dist/leaflet-heat.css" />
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #f0f2f5;
+        }
+        
+        .container {
+            display: flex;
+            height: 100vh;
+        }
+        
+        .sidebar {
+            width: 300px;
+            background: white;
+            box-shadow: 2px 0 10px rgba(0,0,0,0.1);
+            padding: 20px;
+            overflow-y: auto;
+        }
+        
+        .map-container {
+            flex: 1;
+            position: relative;
+        }
+        
+        #map {
+            height: 100%;
+            width: 100%;
+        }
+        
+        .header {
+            margin-bottom: 20px;
+        }
+        
+        .header h1 {
+            color: #2c3e50;
+            margin: 0 0 10px 0;
+            font-size: 20px;
+        }
+        
+        .status-panel {
+            background: #ecf0f1;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+        
+        .status-item {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 8px;
+        }
+        
+        .status-label {
+            font-weight: 600;
+            color: #2c3e50;
+        }
+        
+        .status-value {
+            color: #27ae60;
+            font-weight: 500;
+        }
+        
+        .controls {
+            margin-bottom: 20px;
+        }
+        
+        .btn {
+            background: #3498db;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+            margin-right: 10px;
+            margin-bottom: 10px;
+        }
+        
+        .btn:hover {
+            background: #2980b9;
+        }
+        
+        .btn.danger {
+            background: #e74c3c;
+        }
+        
+        .btn.danger:hover {
+            background: #c0392b;
+        }
+        
+        .data-log {
+            background: #2c3e50;
+            color: #ecf0f1;
+            padding: 15px;
+            border-radius: 8px;
+            height: 150px;
+            overflow-y: auto;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+        }
+        
+        .log-entry {
+            margin-bottom: 5px;
+            padding: 2px 0;
+        }
+        
+        .log-timestamp {
+            color: #95a5a6;
+        }
+        
+        .log-data {
+            color: #3498db;
+        }
+        
+        .slider-container {
+            margin-bottom: 15px;
+        }
+        
+        .slider-container label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: 600;
+            color: #2c3e50;
+        }
+        
+        .slider {
+            width: 100%;
+            height: 6px;
+            border-radius: 3px;
+            background: #ddd;
+            outline: none;
+            -webkit-appearance: none;
+        }
+        
+        .slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            background: #3498db;
+            cursor: pointer;
+        }
+        
+        .connection-status {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            margin-right: 8px;
+        }
+        
+        .connected {
+            background: #27ae60;
+        }
+        
+        .disconnected {
+            background: #e74c3c;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="sidebar">
+            <div class="header">
+                <h1>🗺️ Mapa de Calor RSSI</h1>
+                <p>Dados do Drone em tempo real</p>
+            </div>
+            
+            <div class="status-panel">
+                <h3>Status</h3>
+                <div class="status-item">
+                    <span class="status-label">
+                        <span class="connection-status connected" id="connectionStatus"></span>
+                        Simulação:
+                    </span>
+                    <span class="status-value" id="connectionText">Ativa</span>
+                </div>
+                <div class="status-item">
+                    <span class="status-label">Pontos Coletados:</span>
+                    <span class="status-value" id="pointsCount">0</span>
+                </div>
+                <div class="status-item">
+                    <span class="status-label">Última Atualização:</span>
+                    <span class="status-value" id="lastUpdate">--</span>
+                </div>
+            </div>
+            
+            <div class="controls">
+                <h3>Controles</h3>
+                
+                <div class="slider-container">
+                    <label for="radiusSlider">Raio dos Pontos:</label>
+                    <input type="range" id="radiusSlider" class="slider" min="10" max="100" value="30">
+                    <span id="radiusValue">30</span>px
+                </div>
+                
+                <div class="slider-container">
+                    <label for="blurSlider">Desfoque:</label>
+                    <input type="range" id="blurSlider" class="slider" min="5" max="50" value="15">
+                    <span id="blurValue">15</span>px
+                </div>
+                
+                <button class="btn" id="startBtn">Iniciar Simulação</button>
+                <button class="btn danger" id="clearBtn">Limpar Dados</button>
+            </div>
+            
+            <div class="data-log">
+                <h3>Log de Dados</h3>
+                <div id="logContainer"></div>
+            </div>
+        </div>
+        
+        <div class="map-container">
+            <div id="map"></div>
+        </div>
+    </div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://unpkg.com/leaflet.heat@0.2.0/dist/leaflet-heat.js"></script>
+    <script>
+        class DroneHeatmap {
+            constructor() {
+                this.map = null;
+                this.heatmapLayer = null;
+                this.heatmapData = [];
+                this.simulationInterval = null;
+                this.isSimulating = false;
+                
+                this.initializeMap();
+                this.initializeControls();
+            }
+            
+            initializeMap() {
+                // Inicializar o mapa centrado no Brasil
+                this.map = L.map('map').setView([-15.7801, -47.9292], 4);
+                
+                // Adicionar camada de tiles
+                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                    attribution: '© OpenStreetMap contributors'
+                }).addTo(this.map);
+                
+                // Inicializar camada de mapa de calor
+                this.heatmapLayer = L.heatLayer([], {
+                    radius: 30,
+                    blur: 15,
+                    maxZoom: 18,
+                    max: 1.0,
+                    gradient: {
+                        0.0: 'blue',
+                        0.2: 'cyan',
+                        0.4: 'lime',
+                        0.6: 'yellow',
+                        0.8: 'orange',
+                        1.0: 'red'
+                    }
+                }).addTo(this.map);
+            }
+            
+            initializeControls() {
+                // Controles de simulação
+                document.getElementById('startBtn').addEventListener('click', () => {
+                    if (this.isSimulating) {
+                        this.stopSimulation();
+                    } else {
+                        this.startSimulation();
+                    }
+                });
+                
+                document.getElementById('clearBtn').addEventListener('click', () => {
+                    this.clearData();
+                });
+                
+                // Controles do mapa de calor
+                const radiusSlider = document.getElementById('radiusSlider');
+                const blurSlider = document.getElementById('blurSlider');
+                
+                radiusSlider.addEventListener('input', (e) => {
+                    const value = e.target.value;
+                    document.getElementById('radiusValue').textContent = value;
+                    this.updateHeatmapSettings();
+                });
+                
+                blurSlider.addEventListener('input', (e) => {
+                    const value = e.target.value;
+                    document.getElementById('blurValue').textContent = value;
+                    this.updateHeatmapSettings();
+                });
+            }
+            
+            startSimulation() {
+                this.isSimulating = true;
+                document.getElementById('startBtn').textContent = 'Parar Simulação';
+                document.getElementById('connectionText').textContent = 'Ativa';
+                
+                this.simulationInterval = setInterval(() => {
+                    const simulatedData = this.generateSimulatedData();
+                    this.processDroneData(simulatedData);
+                }, 2000); // Atualizar a cada 2 segundos
+                
+                this.logMessage('Simulação iniciada');
+            }
+            
+            stopSimulation() {
+                this.isSimulating = false;
+                document.getElementById('startBtn').textContent = 'Iniciar Simulação';
+                document.getElementById('connectionText').textContent = 'Parada';
+                
+                if (this.simulationInterval) {
+                    clearInterval(this.simulationInterval);
+                    this.simulationInterval = null;
+                }
+                
+                this.logMessage('Simulação parada');
+            }
+            
+            generateSimulatedData() {
+                // Simular movimento do drone em uma área específica
+                const baseLat = -15.7801 + (Math.random() - 0.5) * 0.01;
+                const baseLng = -47.9292 + (Math.random() - 0.5) * 0.01;
+                const altitude = 50 + Math.random() * 100;
+                
+                // Simular RSSI baseado na distância e altitude
+                const distance = Math.sqrt(Math.pow(baseLat + 15.7801, 2) + Math.pow(baseLng + 47.9292, 2));
+                const rssi = -30 - (distance * 1000) - (altitude * 0.1) + (Math.random() - 0.5) * 10;
+                
+                return {
+                    rssi: Math.round(rssi),
+                    lat: baseLat,
+                    lng: baseLng,
+                    alt: altitude
+                };
+            }
+            
+            processDroneData(data) {
+                // Adicionar timestamp
+                data.timestamp = new Date().toISOString();
+                
+                // Processar dados para o mapa de calor
+                this.addHeatmapPoint(data);
+                
+                // Atualizar interface
+                this.updateStatus(data);
+                this.logMessage(`RSSI=${data.rssi}, Lat=${data.lat.toFixed(6)}, Lng=${data.lng.toFixed(6)}, Alt=${data.alt.toFixed(1)}m`);
+            }
+            
+            addHeatmapPoint(data) {
+                // Normalizar RSSI para intensidade (0-1)
+                // RSSI típico: -100 (muito fraco) a -30 (muito forte)
+                const normalizedIntensity = Math.max(0, Math.min(1, (data.rssi + 100) / 70));
+                
+                // Adicionar ponto ao mapa de calor
+                const heatPoint = [data.lat, data.lng, normalizedIntensity];
+                this.heatmapData.push(heatPoint);
+                
+                // Manter apenas os últimos 500 pontos para performance
+                if (this.heatmapData.length > 500) {
+                    this.heatmapData = this.heatmapData.slice(-500);
+                }
+                
+                // Atualizar camada de calor
+                this.heatmapLayer.setLatLngs(this.heatmapData);
+                
+                // Centralizar mapa no último ponto se for o primeiro
+                if (this.heatmapData.length === 1) {
+                    this.map.setView([data.lat, data.lng], 15);
+                }
+            }
+            
+            updateHeatmapSettings() {
+                const radius = parseInt(document.getElementById('radiusSlider').value);
+                const blur = parseInt(document.getElementById('blurSlider').value);
+                
+                // Remover camada atual
+                this.map.removeLayer(this.heatmapLayer);
+                
+                // Criar nova camada com novas configurações
+                this.heatmapLayer = L.heatLayer(this.heatmapData, {
+                    radius: radius,
+                    blur: blur,
+                    maxZoom: 18,
+                    max: 1.0,
+                    gradient: {
+                        0.0: 'blue',
+                        0.2: 'cyan',
+                        0.4: 'lime',
+                        0.6: 'yellow',
+                        0.8: 'orange',
+                        1.0: 'red'
+                    }
+                }).addTo(this.map);
+            }
+            
+            updateStatus(data) {
+                document.getElementById('pointsCount').textContent = this.heatmapData.length;
+                document.getElementById('lastUpdate').textContent = new Date().toLocaleTimeString();
+            }
+            
+            clearData() {
+                this.heatmapData = [];
+                this.heatmapLayer.setLatLngs([]);
+                document.getElementById('pointsCount').textContent = '0';
+                document.getElementById('lastUpdate').textContent = '--';
+                this.logMessage('Dados do mapa de calor limpos');
+            }
+            
+            logMessage(message) {
+                const logContainer = document.getElementById('logContainer');
+                const timestamp = new Date().toLocaleTimeString();
+                const logEntry = document.createElement('div');
+                logEntry.className = 'log-entry';
+                logEntry.innerHTML = `<span class="log-timestamp">[${timestamp}]</span> <span class="log-data">${message}</span>`;
+                
+                logContainer.appendChild(logEntry);
+                logContainer.scrollTop = logContainer.scrollHeight;
+                
+                // Manter apenas os últimos 30 logs
+                while (logContainer.children.length > 30) {
+                    logContainer.removeChild(logContainer.firstChild);
+                }
+            }
+        }
+        
+        // Inicializar aplicação quando a página carregar
+        document.addEventListener('DOMContentLoaded', () => {
+            new DroneHeatmap();
+        });
+    </script>
+</body>
+</html>
